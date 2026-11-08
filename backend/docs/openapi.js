@@ -47,11 +47,11 @@
  *         publishedAt:
  *           type: string
  *           format: date-time
- *           description: Set after simulated publishing succeeds.
+ *           description: Set only after the platform service confirms publishing success.
  *         publishingResponse:
  *           type: object
  *           nullable: true
- *           description: Simulated publishing result or failure details.
+ *           description: Publishing attempt details, provider response, or failure information.
  *           additionalProperties: true
  *         createdAt:
  *           type: string
@@ -92,7 +92,8 @@
  *       Creates a post with pending status. An image is optional. For an uploaded image,
  *       use multipart/form-data with the file field named image. Supported formats are
  *       JPG, JPEG, PNG, and WEBP, up to 5 MB. Uploaded images are stored in Cloudinary;
- *       the returned post contains imageUrl and imagePublicId. Publishing is simulated.
+ *       the returned post contains imageUrl and imagePublicId. Platform integrations
+ *       are not configured, so due posts are recorded as failed rather than published.
  *     requestBody:
  *       required: true
  *       content:
@@ -427,12 +428,13 @@
  *     summary: Run the scheduler manually
  *     description: >
  *       Processes pending posts whose scheduledAt time has arrived. Posts are marked
- *       processing before the platform service is called, then published or failed.
- *       Instagram and LinkedIn services are mocks; no real social media post is created.
+ *       processing before the platform service is called. A post is marked published
+ *       only after the service confirms success. Currently the platform integrations
+ *       are not configured, so due posts are marked failed with PUBLISHING_NOT_CONFIGURED.
  *       The automatic scheduler also runs every minute.
  *     responses:
  *       '200':
- *         description: Scheduler completed and returns posts claimed by this run.
+ *         description: Scheduler completed and returns posts attempted by this run; publishing may fail while integrations are unconfigured.
  *         content:
  *           application/json:
  *             schema:
@@ -454,8 +456,20 @@
  *                     $ref: '#/components/schemas/Post'
  *             example:
  *               message: Scheduler ran successfully
- *               processed: 0
- *               posts: []
+ *               processed: 1
+ *               posts:
+ *                 - _id: 665f1a2b3c4d5e6f7890abcd
+ *                   caption: Hello Instagram!
+ *                   platform: instagram
+ *                   scheduledAt: 2000-01-01T00:00:00.000Z
+ *                   status: failed
+ *                   publishingResponse:
+ *                     success: false
+ *                     platform: instagram
+ *                     code: PUBLISHING_NOT_CONFIGURED
+ *                     message: Instagram publishing is unavailable until an API integration is configured
+ *                     attemptedAt: 2026-11-08T10:00:00.000Z
+ *                     failedAt: 2026-11-08T10:00:00.100Z
  *       '500':
  *         description: Scheduler could not run.
  *         content:

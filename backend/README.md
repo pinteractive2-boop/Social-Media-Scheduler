@@ -1,11 +1,12 @@
 # Social Media Post Scheduler Backend
 
 A small Node.js + Express + MongoDB backend for managing scheduled social posts.
-Image files are stored in Cloudinary, and publishing to Instagram or LinkedIn is
-simulated for this assignment.
+Image files are stored in Cloudinary. Publishing services are structured for
+Instagram and LinkedIn integration, but neither platform API is connected yet.
 
-**Mock publishing only.** The backend does not call real Instagram or LinkedIn
-APIs. Cloudinary is used only for image storage.
+**No publishing simulations are returned.** Due posts are marked failed with
+`PUBLISHING_NOT_CONFIGURED` until a real platform integration is added. A post is
+never marked `published` unless its publishing service confirms success.
 
 ## Project Structure
 
@@ -22,7 +23,7 @@ backend/
 ├── routes/                # API routes
 │   ├── postRoutes.js
 │   └── schedulerRoutes.js
-├── services/              # Mock publishing services
+├── services/              # Image storage and platform publishing adapters
 │   ├── imageService.js
 │   ├── instagramService.js
 │   ├── linkedinService.js
@@ -86,8 +87,8 @@ for due posts every minute.
 | platform | String | `instagram` or `linkedin`, required |
 | scheduledAt | Date | required, ISO 8601 |
 | status | String | `pending` / `processing` / `published` / `failed` |
-| publishedAt | Date | set when published |
-| publishingResponse | Mixed | mock response from the publishing service |
+| publishedAt | Date | set only when a publishing service confirms success |
+| publishingResponse | Mixed | publishing attempt, provider response, or failure details |
 
 ## API Endpoints
 
@@ -141,8 +142,9 @@ POST /api/scheduler/run
 ```
 
 This runs the same scheduling logic as the cron job: finds pending posts whose
-`scheduledAt` time has arrived, publishes them via the mock service, and updates
-their status to `published` (or `failed`).
+`scheduledAt` time has arrived, marks them as `processing`, then calls the platform
+publishing service. Until platform APIs are connected, due posts are marked
+`failed` with `PUBLISHING_NOT_CONFIGURED`; they are not reported as published.
 
 ## Postman Testing Examples
 
@@ -177,15 +179,16 @@ their status to `published` (or `failed`).
 
 5. **Check the updated publishing status**
    - `GET http://localhost:5000/api/posts`
-   - Look for `status: "published"`, `publishedAt`, and `publishingResponse`
-     (marked `MOCK ONLY`).
+   - Currently due posts should have `status: "failed"` and a
+     `publishingResponse.code` of `PUBLISHING_NOT_CONFIGURED`.
 
 ## Notes
 
-- All publishing is mocked. Responses include `mockPostId`, `simulated: true`,
-  and a `MOCK ONLY` message. No real Instagram or LinkedIn API is ever called.
-- To test the failed state, start the caption with `[mock-fail]`; this is a
-  deterministic test hook for the mock publisher.
+- Instagram and LinkedIn services currently return an explicit
+  `PUBLISHING_NOT_CONFIGURED` failure. No mock post IDs or simulated success
+  responses are created.
+- Replace the platform service implementations with authenticated provider calls
+  when the official API integrations are added. Keep credentials server-side.
 - A post is atomically changed from `pending` to `processing` before publishing,
   so overlapping scheduler runs cannot claim the same post.
 - The manual `/api/scheduler/run` endpoint uses the same `runScheduler()`

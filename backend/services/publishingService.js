@@ -1,22 +1,20 @@
 const instagramService = require('./instagramService');
 const linkedinService = require('./linkedinService');
 
-/**
- * Routes a post to the correct mock publishing service.
- * MOCK ONLY - no real external API requests.
- */
-function publish(post) {
-  if (post.caption.trim().toLowerCase().startsWith('[mock-fail]')) {
-    throw new Error('Simulated publishing failure requested by [mock-fail]');
+const platformServices = {
+  instagram: instagramService,
+  linkedin: linkedinService,
+};
+
+async function publish(post) {
+  const service = platformServices[post.platform];
+  if (!service) {
+    const error = new Error(`Unsupported publishing platform: ${post.platform}`);
+    error.code = 'UNSUPPORTED_PLATFORM';
+    throw error;
   }
 
-  if (post.platform === 'instagram') {
-    return instagramService.publish(post);
-  }
-  if (post.platform === 'linkedin') {
-    return linkedinService.publish(post);
-  }
-  throw new Error(`Unsupported platform: ${post.platform}`);
+  return service.publish(post);
 }
 
 module.exports = { publish };

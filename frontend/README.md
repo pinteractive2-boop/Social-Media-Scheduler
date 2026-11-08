@@ -27,5 +27,7 @@ secret.
 
 ## Publishing
 
-Instagram and LinkedIn publishing is simulated by the backend. A successful
-`published` status does not represent a real post on either social platform.
+Instagram and LinkedIn API integrations are not configured yet. When a scheduled
+post becomes due, the backend records the failed attempt using
+`PUBLISHING_NOT_CONFIGURED`; it does not create simulated or real social posts.
+The frontend displays that status and failure message.

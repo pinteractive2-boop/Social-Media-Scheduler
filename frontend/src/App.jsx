@@ -317,8 +317,8 @@ function App() {
               {saving ? 'Saving…' : editingId ? 'Save changes' : 'Schedule post'}
               {!saving && <span aria-hidden="true">→</span>}
             </button>
-            <p className="mock-note">
-              Posts are saved to your schedule. Publishing is simulated by the backend.
+            <p className="publishing-note">
+              Posts are saved to your schedule. Social platform publishing is not connected yet.
             </p>
           </form>
         </section>

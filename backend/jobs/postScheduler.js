@@ -4,28 +4,47 @@ const publishingService = require('../services/publishingService');
 
 let cronTask = null;
 
-async function publishPost(post) {
+async function publishPost(post, attemptedAt) {
+  let response;
   try {
-    const response = await publishingService.publish(post);
+    response = await publishingService.publish(post);
     if (!response || response.success !== true) {
-      throw new Error('Mock publishing service did not confirm success');
+      const error = new Error('Publishing service did not confirm success');
+      error.code = 'INVALID_PUBLISHING_RESPONSE';
+      throw error;
     }
-
-    post.status = 'published';
-    post.publishedAt = new Date();
-    post.publishingResponse = response;
-    await post.save();
-    console.log(`[MOCK] Post ${post._id} published to ${post.platform}`);
   } catch (error) {
     post.status = 'failed';
+    post.publishedAt = undefined;
     post.publishingResponse = {
       success: false,
-      simulated: true,
-      error: error.message,
+      platform: post.platform,
+      code: error.code || 'PUBLISHING_FAILED',
+      message: error.code === 'PUBLISHING_NOT_CONFIGURED'
+        ? error.message
+        : 'Publishing failed. Check the backend configuration and logs.',
+      attemptedAt,
+      failedAt: new Date(),
     };
     await post.save();
-    console.error(`[MOCK] Post ${post._id} failed: ${error.message}`);
+    console.error(
+      `Post ${post._id} failed to publish to ${post.platform} (${post.publishingResponse.code})`
+    );
+    return post;
   }
+
+  const completedAt = new Date();
+  post.status = 'published';
+  post.publishedAt = completedAt;
+  post.publishingResponse = {
+    success: true,
+    platform: post.platform,
+    attemptedAt,
+    completedAt,
+    providerResponse: response,
+  };
+  await post.save();
+  console.log(`Post ${post._id} was published to ${post.platform}`);
 
   return post;
 }
@@ -46,11 +65,22 @@ async function runScheduler() {
           status: 'pending',
           scheduledAt: { $lte: now },
         },
-        { $set: { status: 'processing' } },
+        {
+          $set: {
+            status: 'processing',
+            publishingResponse: {
+              success: null,
+              attemptedAt: now,
+            },
+          },
+          $unset: { publishedAt: 1 },
+        },
         { new: true }
       );
 
-      if (post) processedPosts.push(await publishPost(post));
+      if (post) {
+        processedPosts.push(await publishPost(post, now));
+      }
     } catch (error) {
       console.error(`Failed to process scheduled post ${duePost._id}:`, error);
     }
