@@ -13,9 +13,17 @@ const app = express();
 
 app.use(express.json());
 
-const frontendOrigin = process.env.FRONTEND_ORIGIN || '*';
+const frontendOrigin = process.env.FRONTEND_ORIGIN;
 app.use(cors({
-  origin: frontendOrigin,
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, curl, etc.)
+    if (!origin) return callback(null, true);
+    // With credentials, echo the specific origin instead of '*'
+    if (!frontendOrigin || origin === frontendOrigin) {
+      return callback(null, origin);
+    }
+    return callback(new Error(`Not allowed by CORS: ${origin}`));
+  },
   credentials: true,
   allowedHeaders: ['Content-Type', 'Cookie', 'authorization'],
   exposedHeaders: ['Set-Cookie'],
