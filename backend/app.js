@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const cors = require('cors');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
 const authRoutes = require('./routes/authRoutes');
@@ -11,6 +12,14 @@ const schedulerRoutes = require('./routes/schedulerRoutes');
 const app = express();
 
 app.use(express.json());
+
+const frontendOrigin = process.env.FRONTEND_ORIGIN || '*';
+app.use(cors({
+  origin: frontendOrigin,
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Cookie', 'authorization'],
+  exposedHeaders: ['Set-Cookie'],
+}));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/api/auth', authRoutes);

@@ -31,17 +31,19 @@ function setSessionCookie(res, user) {
     audience: 'social-media-scheduler-client',
   });
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const sameSite = process.env.NODE_ENV === 'production' ? '; SameSite=None' : '; SameSite=Lax';
   res.append(
     'Set-Cookie',
-    `scheduler_session=${token}; Max-Age=${sessionLifetimeSeconds}; Path=/api; HttpOnly; SameSite=Lax${secure}`
+    `scheduler_session=${token}; Max-Age=${sessionLifetimeSeconds}; Path=/api; HttpOnly${sameSite}${secure}`
   );
 }
 
 function clearSessionCookie(res) {
   const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  const sameSite = process.env.NODE_ENV === 'production' ? '; SameSite=None' : '; SameSite=Lax';
   res.append(
     'Set-Cookie',
-    `scheduler_session=; Max-Age=0; Path=/api; HttpOnly; SameSite=Lax${secure}`
+    `scheduler_session=; Max-Age=0; Path=/api; HttpOnly${sameSite}${secure}`
   );
 }
 
