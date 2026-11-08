@@ -93,7 +93,15 @@ exports.register = async (req, res) => {
       passwordHash: await bcrypt.hash(password, 12),
     });
     await user.save();
-    await zernioService.ensureProfile(user);
+
+    // Zernio profile setup is non-blocking for authentication.
+    // If Zernio is unavailable or quota-limited, the user can still register.
+    try {
+      await zernioService.ensureProfile(user);
+    } catch (profileError) {
+      console.error('Zernio profile setup failed during registration (non-blocking):', profileError.message);
+    }
+
     setSessionCookie(res, user);
     return res.status(201).json({ user: getUserResponse(user) });
   } catch (error) {
@@ -119,7 +127,14 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Email or password is incorrect' });
     }
 
-    await zernioService.ensureProfile(user);
+    // Zernio profile setup is non-blocking for authentication.
+    // If Zernio is unavailable or quota-limited, the user can still sign in.
+    try {
+      await zernioService.ensureProfile(user);
+    } catch (profileError) {
+      console.error('Zernio profile setup failed during login (non-blocking):', profileError.message);
+    }
+
     setSessionCookie(res, user);
     return res.json({ user: getUserResponse(user) });
   } catch (error) {

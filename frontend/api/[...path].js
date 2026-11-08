@@ -30,7 +30,16 @@ export default async function proxyApiRequest(request, response) {
   }
 
   try {
-    const targetUrl = new URL(request.url, backendUrl);
+    // Build the upstream URL from the configured backend base URL and the
+    // incoming request path only. Resolving request.url directly against
+    // backendUrl would ignore backendUrl entirely when request.url is an
+    // absolute URL, causing requests to be forwarded back to the frontend
+    // origin instead of the Render backend (and risking path duplication).
+    const normalizedRequest = new URL(request.url, 'http://localhost');
+    const targetUrl = new URL(
+      normalizedRequest.pathname + normalizedRequest.search,
+      backendUrl,
+    );
     const headers = new Headers();
 
     for (const [name, value] of Object.entries(request.headers)) {
