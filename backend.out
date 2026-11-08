@@ -1,0 +1,4 @@
+MONGODB_URI=mongodb://127.0.0.1:62431/
+[BE] MongoDB connected
+[BE] Scheduler started: checking due Zernio posts every minute
+[BE] Server running on port 5000

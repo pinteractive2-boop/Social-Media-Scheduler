@@ -1,9 +1,22 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createPost, deletePost, getPosts, updatePost } from './api.js';
+import {
+  createPost,
+  deletePost,
+  getAccountConnectUrl,
+  getConnectedAccounts,
+  getCurrentUser,
+  getPostStatus,
+  getPosts,
+  loginUser,
+  logoutUser,
+  registerUser,
+  updatePost,
+} from './api.js';
 
 const initialForm = {
   caption: '',
   platform: 'instagram',
+  accountId: '',
   scheduledAt: '',
 };
 const maxImageSize = 4 * 1024 * 1024;
@@ -46,6 +59,15 @@ function StatusBadge({ status }) {
 }
 
 function App() {
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authMode, setAuthMode] = useState('login');
+  const [authForm, setAuthForm] = useState({
+    email: '',
+    password: '',
+    displayName: '',
+  });
+  const [accounts, setAccounts] = useState([]);
   const [posts, setPosts] = useState([]);
   const [form, setForm] = useState(initialForm);
   const [image, setImage] = useState(null);
@@ -67,9 +89,54 @@ function App() {
     }
   }, []);
 
+  const loadAccounts = useCallback(async () => {
+    try {
+      const result = await getConnectedAccounts();
+      const nextAccounts = Array.isArray(result.accounts) ? result.accounts : [];
+      setAccounts(nextAccounts);
+      setForm((current) => {
+        const accountIsAvailable = nextAccounts.some(
+          (account) =>
+            account.platform === current.platform &&
+            account.accountId === current.accountId &&
+            account.isActive,
+        );
+        const defaultAccount = nextAccounts.find(
+          (account) => account.platform === current.platform && account.isActive,
+        );
+        return {
+          ...current,
+          accountId: accountIsAvailable ? current.accountId : defaultAccount?.accountId || '',
+        };
+      });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message });
+    }
+  }, []);
+
   useEffect(() => {
-    loadPosts();
-  }, [loadPosts]);
+    let active = true;
+    async function loadSession() {
+      try {
+        const result = await getCurrentUser();
+        if (!active) return;
+        setUser(result.user);
+        await Promise.all([loadPosts(), loadAccounts()]);
+      } catch (error) {
+        if (!active) return;
+        setUser(null);
+        if (error.status !== 401) {
+          setMessage({ type: 'error', text: error.message });
+        }
+      } finally {
+        if (active) setAuthLoading(false);
+      }
+    }
+    loadSession();
+    return () => {
+      active = false;
+    };
+  }, [loadAccounts, loadPosts]);
 
   useEffect(() => {
     if (!message) return undefined;
@@ -98,6 +165,7 @@ function App() {
     setForm({
       caption: post.caption || '',
       platform: post.platform || 'instagram',
+      accountId: post.accountId || '',
       scheduledAt: toLocalDateTime(post.scheduledAt),
     });
     setImage(null);
@@ -105,6 +173,86 @@ function App() {
     setEditingId(post._id);
     setMessage(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function handlePlatformChange(platform) {
+    const account = accounts.find(
+      (item) => item.platform === platform && item.isActive,
+    );
+    setForm((current) => ({
+      ...current,
+      platform,
+      accountId: account?.accountId || '',
+    }));
+  }
+
+  async function handleAuthSubmit(event) {
+    event.preventDefault();
+    setMessage(null);
+    try {
+      const result = authMode === 'register'
+        ? await registerUser(authForm)
+        : await loginUser(authForm);
+      setUser(result.user);
+      setAuthForm({ email: '', password: '', displayName: '' });
+      await Promise.all([loadPosts(), loadAccounts()]);
+      setMessage({ type: 'success', text: authMode === 'register' ? 'Account created.' : 'Signed in.' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message });
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logoutUser();
+      setUser(null);
+      setPosts([]);
+      setAccounts([]);
+      resetForm();
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message });
+    }
+  }
+
+  async function connectAccount(platform) {
+    const popup = window.open('about:blank', '_blank');
+    try {
+      const result = await getAccountConnectUrl(platform);
+      if (!popup) {
+        setMessage({ type: 'error', text: 'Allow pop-ups to connect your account.' });
+        return;
+      }
+      popup.opener = null;
+      popup.location.href = result.authUrl;
+      setMessage({
+        type: 'success',
+        text: `Finish connecting ${platform === 'instagram' ? 'Instagram' : 'LinkedIn'} in the new tab, then refresh accounts here.`,
+      });
+    } catch (error) {
+      if (popup) popup.close();
+      setMessage({ type: 'error', text: error.message });
+    }
+  }
+
+  async function refreshPostStatus(post) {
+    try {
+      const result = await getPostStatus(post._id);
+      setPosts((current) =>
+        current.map((item) =>
+          item._id === post._id
+            ? {
+                ...item,
+                status: result.status,
+                publishedAt: result.publishedAt,
+                publishingResponse: result.publishingResponse,
+              }
+            : item,
+        ),
+      );
+      setMessage({ type: 'success', text: `Post status: ${result.status}.` });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.message });
+    }
   }
 
   function handleImageChange(event) {
@@ -142,10 +290,24 @@ function App() {
       setMessage({ type: 'error', text: 'Choose a scheduled date and time.' });
       return;
     }
+    const currentPost = posts.find((post) => post._id === editingId);
+    if (
+      form.platform === 'instagram' &&
+      !image &&
+      !currentPost?.imageUrl
+    ) {
+      setMessage({ type: 'error', text: 'Instagram posts require an image.' });
+      return;
+    }
+    if (!form.accountId) {
+      setMessage({ type: 'error', text: 'Connect an account for the selected platform first.' });
+      return;
+    }
 
     const post = {
       caption: form.caption.trim(),
       platform: form.platform,
+      accountId: form.accountId,
       scheduledAt: new Date(form.scheduledAt).toISOString(),
     };
 
@@ -199,10 +361,19 @@ function App() {
           </span>
           <span>social<span className="brand-light">scheduler</span></span>
         </a>
-        <span className="topbar-note">
-          <span className="live-dot" aria-hidden="true" />
-          Your publishing workspace
-        </span>
+        {user ? (
+          <div className="topbar-actions">
+            <span className="topbar-note">{user.email}</span>
+            <button type="button" className="text-button" onClick={handleLogout}>
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <span className="topbar-note">
+            <span className="live-dot" aria-hidden="true" />
+            Your publishing workspace
+          </span>
+        )}
       </header>
 
       <section className="intro">
@@ -226,6 +397,101 @@ function App() {
           </button>
         </div>
       )}
+
+      {authLoading ? (
+        <div className="empty-state panel auth-loading">
+          <span className="loader" />
+          <p>Checking your account…</p>
+        </div>
+      ) : !user ? (
+        <section className="auth-panel panel">
+          <p className="eyebrow">YOUR PRIVATE WORKSPACE</p>
+          <h2>{authMode === 'register' ? 'Create your account' : 'Welcome back'}</h2>
+          <p className="auth-copy">
+            Sign in to manage your own connected social accounts and scheduled posts.
+          </p>
+          <form className="post-form" onSubmit={handleAuthSubmit}>
+            {authMode === 'register' && (
+              <>
+                <label className="field-label" htmlFor="displayName">Name <span className="optional">(optional)</span></label>
+                <input
+                  id="displayName"
+                  type="text"
+                  maxLength="80"
+                  value={authForm.displayName}
+                  onChange={(event) => setAuthForm({ ...authForm, displayName: event.target.value })}
+                  autoComplete="name"
+                />
+              </>
+            )}
+            <label className="field-label" htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={authForm.email}
+              onChange={(event) => setAuthForm({ ...authForm, email: event.target.value })}
+            />
+            <label className="field-label" htmlFor="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              minLength="8"
+              maxLength="72"
+              required
+              autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
+              value={authForm.password}
+              onChange={(event) => setAuthForm({ ...authForm, password: event.target.value })}
+            />
+            <button className="primary-button submit-button" type="submit">
+              {authMode === 'register' ? 'Create account' : 'Sign in'}
+              <span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <button
+            type="button"
+            className="text-button auth-switch"
+            onClick={() => setAuthMode(authMode === 'register' ? 'login' : 'register')}
+          >
+            {authMode === 'register' ? 'Already have an account? Sign in' : 'New here? Create an account'}
+          </button>
+        </section>
+      ) : (
+      <>
+      <section className="accounts-panel panel">
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">SOCIAL ACCOUNTS</p>
+            <h2>Connected accounts</h2>
+          </div>
+          <button className="refresh-button" type="button" onClick={loadAccounts}>
+            Refresh
+          </button>
+        </div>
+        <div className="account-controls">
+          <button className="secondary-button" type="button" onClick={() => connectAccount('instagram')}>
+            Connect Instagram
+          </button>
+          <button className="secondary-button" type="button" onClick={() => connectAccount('linkedin')}>
+            Connect LinkedIn
+          </button>
+        </div>
+        <p className="publishing-note">
+          Instagram requires a Business or Creator account. Zernio schedules and publishes posts on your behalf.
+        </p>
+        {accounts.length > 0 && (
+          <ul className="account-list">
+            {accounts.map((account) => (
+              <li key={account.accountId}>
+                <span>{account.platform === 'instagram' ? 'Instagram' : 'LinkedIn'}</span>
+                <span>{account.username || account.accountId}</span>
+                <StatusBadge status={account.isActive ? 'connected' : 'failed'} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="workspace">
         <section className="composer panel">
@@ -262,10 +528,28 @@ function App() {
                 <select
                   id="platform"
                   value={form.platform}
-                  onChange={(event) => setForm({ ...form, platform: event.target.value })}
+                  onChange={(event) => handlePlatformChange(event.target.value)}
                 >
                   <option value="instagram">Instagram</option>
                   <option value="linkedin">LinkedIn</option>
+                </select>
+              </div>
+              <div>
+                <label className="field-label" htmlFor="accountId">Connected account</label>
+                <select
+                  id="accountId"
+                  value={form.accountId}
+                  onChange={(event) => setForm({ ...form, accountId: event.target.value })}
+                  required
+                >
+                  <option value="">Choose an account</option>
+                  {accounts
+                    .filter((account) => account.platform === form.platform && account.isActive)
+                    .map((account) => (
+                      <option key={account.accountId} value={account.accountId}>
+                        {account.username || account.accountId}
+                      </option>
+                    ))}
                 </select>
               </div>
               <div>
@@ -281,7 +565,7 @@ function App() {
             </div>
 
             <div className="upload-field">
-              <label className="field-label" htmlFor="image">Image <span className="optional">(optional)</span></label>
+              <label className="field-label" htmlFor="image">Image <span className="optional">{form.platform === 'instagram' ? '(required)' : '(optional)'}</span></label>
               <label className="file-picker" htmlFor="image">
                 <span className="upload-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
@@ -318,7 +602,7 @@ function App() {
               {!saving && <span aria-hidden="true">→</span>}
             </button>
             <p className="publishing-note">
-              Posts are saved to your schedule. Social platform publishing is not connected yet.
+              Scheduled posts are submitted to Zernio. This app checks publishing status every minute.
             </p>
           </form>
         </section>
@@ -357,7 +641,8 @@ function App() {
             <div className="post-list">
               {orderedPosts.map((post) => {
                 const imageUrl = safeImageUrl(post.imageUrl);
-                const canManage = post.status === 'pending';
+                const canEdit = post.status === 'pending';
+                const canDelete = post.status === 'pending' || post.status === 'failed';
                 return (
                   <article className="post-card panel" key={post._id}>
                     <div className="post-card-top">
@@ -381,20 +666,27 @@ function App() {
                         </svg>
                         <span>{formatDate(post.scheduledAt)}</span>
                       </div>
-                      {canManage && (
-                        <div className="post-actions">
+                      <div className="post-actions">
+                        {post.providerPostId && (
+                          <button type="button" className="text-button" onClick={() => refreshPostStatus(post)}>
+                            Check status
+                          </button>
+                        )}
+                        {canEdit && (
                           <button type="button" className="icon-button" onClick={() => editPost(post)} aria-label="Edit post">
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path d="m14 5 5 5M4 20l4.3-.9L19 8.4a2.1 2.1 0 0 0-3-3L5.3 16.1 4 20Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           </button>
+                        )}
+                        {canDelete && (
                           <button type="button" className="icon-button delete-button" onClick={() => handleDelete(post)} aria-label="Delete post">
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           </button>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
                     {post.publishingResponse?.message && (
                       <p className="publish-note">{post.publishingResponse.message}</p>
@@ -410,7 +702,9 @@ function App() {
         <span>Made for thoughtful scheduling.</span>
         <span>Social Scheduler <span className="footer-dot">·</span> v1.0</span>
       </footer>
-    </main>
+      </>
+   )}
+     </main>
   );
 }
 

@@ -3,7 +3,7 @@ const { runScheduler } = require('../jobs/postScheduler');
 // POST /api/scheduler/run - Manually trigger the scheduler
 exports.runScheduler = async (req, res) => {
   try {
-    const posts = await runScheduler();
+    const posts = await runScheduler(req.user._id);
     return res.json({
       message: 'Scheduler ran successfully',
       processed: posts.length,

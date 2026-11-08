@@ -2,6 +2,9 @@ const express = require('express');
 const multer = require('multer');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = require('./config/swagger');
+const authRoutes = require('./routes/authRoutes');
+const integrationRoutes = require('./routes/integrationRoutes');
+const requireAuth = require('./middleware/requireAuth');
 const postRoutes = require('./routes/postRoutes');
 const schedulerRoutes = require('./routes/schedulerRoutes');
 
@@ -10,8 +13,10 @@ const app = express();
 app.use(express.json());
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-app.use('/api/posts', postRoutes);
-app.use('/api/scheduler', schedulerRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/integrations', integrationRoutes);
+app.use('/api/posts', requireAuth, postRoutes);
+app.use('/api/scheduler', requireAuth, schedulerRoutes);
 
 app.get('/', (req, res) => {
   res.send('Social Media Scheduler API');

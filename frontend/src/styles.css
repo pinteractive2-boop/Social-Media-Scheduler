@@ -92,6 +92,118 @@ button:disabled {
   font-size: 12px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.topbar-actions .topbar-note {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-panel,
+.accounts-panel {
+  margin-bottom: 24px;
+  padding: 26px;
+}
+
+.auth-panel {
+  max-width: 480px;
+  margin: 0 auto 56px;
+}
+
+.auth-panel h2 {
+  margin: 0;
+  font-family: Manrope, sans-serif;
+  font-size: 23px;
+}
+
+.auth-copy {
+  margin: 10px 0 23px;
+  color: #77798c;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.auth-panel .post-form {
+  display: grid;
+  gap: 10px;
+}
+
+.auth-panel .field-label {
+  margin: 4px 0 -4px;
+}
+
+.auth-panel input {
+  width: 100%;
+  height: 43px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #e6e7ee;
+  border-radius: 9px;
+}
+
+.auth-panel input:focus {
+  border-color: #a79cf3;
+  box-shadow: 0 0 0 3px rgb(102 86 232 / 10%);
+  outline: none;
+}
+
+.auth-switch {
+  margin-top: 17px;
+}
+
+.auth-loading {
+  margin-bottom: 55px;
+}
+
+.account-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.secondary-button {
+  min-height: 38px;
+  padding: 0 13px;
+  color: #6253dc;
+  background: #f4f2ff;
+  border: 1px solid #e5e1ff;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.secondary-button:hover {
+  background: #ece9ff;
+}
+
+.account-list {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.account-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #fafaff;
+  border: 1px solid #efeff5;
+  border-radius: 9px;
+  color: #55566a;
+  font-size: 12px;
+}
+
 .live-dot,
 .status-dot {
   width: 7px;
@@ -221,7 +333,10 @@ button:disabled {
 
 textarea,
 select,
-input[type='datetime-local'] {
+input[type='datetime-local'],
+input[type='email'],
+input[type='password'],
+input[type='text'] {
   width: 100%;
   color: var(--ink);
   background: #fff;
@@ -251,7 +366,10 @@ input[type='datetime-local'] {
 
 textarea:focus,
 select:focus,
-input[type='datetime-local']:focus {
+input[type='datetime-local']:focus,
+input[type='email']:focus,
+input[type='password']:focus,
+input[type='text']:focus {
   border-color: #a79cf3;
   box-shadow: 0 0 0 3px rgb(102 86 232 / 10%);
 }
@@ -564,6 +682,15 @@ input[type='datetime-local']:focus {
 .status-pending {
   color: #9a711c;
   background: #fff8e7;
+}
+
+.status-connected {
+  color: #287e59;
+  background: #effaf4;
+}
+
+.status-connected .status-dot {
+  background: #51bd8b;
 }
 
 .status-pending .status-dot {

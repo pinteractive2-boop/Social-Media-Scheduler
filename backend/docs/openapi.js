@@ -89,11 +89,11 @@
  *       - Posts
  *     summary: Create a scheduled post
  *     description: >
- *       Creates a post with pending status. An image is optional. For an uploaded image,
- *       use multipart/form-data with the file field named image. Supported formats are
- *       JPG, JPEG, PNG, and WEBP, up to 5 MB. Uploaded images are stored in Cloudinary;
- *       the returned post contains imageUrl and imagePublicId. Platform integrations
- *       are not configured, so due posts are recorded as failed rather than published.
+ *       Creates a scheduled post via Zernio. An image is required for Instagram
+ *       and optional for LinkedIn. Use multipart/form-data with the file field
+ *       named image to upload (JPG, JPEG, PNG, WEBP, up to 5 MB). Uploaded images
+ *       are stored in Cloudinary. The post is scheduled with Zernio at the selected
+ *       date and time; the scheduler syncs publishing status every minute.
  *     requestBody:
  *       required: true
  *       content:
@@ -429,12 +429,11 @@
  *     description: >
  *       Processes pending posts whose scheduledAt time has arrived. Posts are marked
  *       processing before the platform service is called. A post is marked published
- *       only after the service confirms success. Currently the platform integrations
- *       are not configured, so due posts are marked failed with PUBLISHING_NOT_CONFIGURED.
- *       The automatic scheduler also runs every minute.
+ *       only after Zernio confirms success. The automatic scheduler also runs every
+ *       minute, syncing publishing status from Zernio for all due posts.
  *     responses:
  *       '200':
- *         description: Scheduler completed and returns posts attempted by this run; publishing may fail while integrations are unconfigured.
+ *         description: Scheduler completed and returns posts attempted by this run.
  *         content:
  *           application/json:
  *             schema:
@@ -461,15 +460,13 @@
  *                 - _id: 665f1a2b3c4d5e6f7890abcd
  *                   caption: Hello Instagram!
  *                   platform: instagram
- *                   scheduledAt: 2000-01-01T00:00:00.000Z
- *                   status: failed
+ *                   scheduledAt: 2026-11-08T15:00:00.000Z
+ *                   status: published
+ *                   publishedAt: 2026-11-08T15:00:05.000Z
  *                   publishingResponse:
- *                     success: false
- *                     platform: instagram
- *                     code: PUBLISHING_NOT_CONFIGURED
- *                     message: Instagram publishing is unavailable until an API integration is configured
- *                     attemptedAt: 2026-11-08T10:00:00.000Z
- *                     failedAt: 2026-11-08T10:00:00.100Z
+ *                     provider: zernio
+ *                     status: published
+ *                     checkedAt: 2026-11-08T15:00:05.000Z
  *       '500':
  *         description: Scheduler could not run.
  *         content:

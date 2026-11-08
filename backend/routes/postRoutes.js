@@ -5,6 +5,7 @@ const uploadImage = require('../middleware/uploadImage');
 
 router.post('/', uploadImage.single('image'), postController.createPost);
 router.get('/', postController.getAllPosts);
+router.get('/:id/status', postController.getPostStatus);
 router.get('/:id', postController.getPost);
 router.put('/:id', uploadImage.single('image'), postController.updatePost);
 router.delete('/:id', postController.deletePost);

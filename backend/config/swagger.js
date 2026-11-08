@@ -7,7 +7,7 @@ const options = {
     info: {
       title: 'Social Media Scheduler API',
       description:
-        'API for creating and scheduling posts. Instagram and LinkedIn API integrations are not configured, so due posts are marked failed until the real publishing services are connected.',
+        'API for creating and scheduling posts to Instagram and LinkedIn via Zernio. Includes authentication, image uploads (Cloudinary), connected account management, and automatic scheduled publishing.',
       version: '1.0.0',
     },
     servers: [
@@ -22,6 +22,8 @@ const options = {
     ],
     tags: [
       { name: 'General', description: 'General API information' },
+      { name: 'Auth', description: 'User registration, login, and session' },
+      { name: 'Integrations', description: 'Social account connection via Zernio' },
       { name: 'Posts', description: 'Create and manage scheduled posts' },
       { name: 'Scheduler', description: 'Run scheduled publishing attempts' },
     ],

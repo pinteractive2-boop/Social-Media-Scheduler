@@ -1,58 +1,17 @@
 const cron = require('node-cron');
 const Post = require('../models/Post');
-const publishingService = require('../services/publishingService');
+const User = require('../models/User');
+const postStatusService = require('../services/postStatusService');
 
 let cronTask = null;
 
-async function publishPost(post, attemptedAt) {
-  let response;
-  try {
-    response = await publishingService.publish(post);
-    if (!response || response.success !== true) {
-      const error = new Error('Publishing service did not confirm success');
-      error.code = 'INVALID_PUBLISHING_RESPONSE';
-      throw error;
-    }
-  } catch (error) {
-    post.status = 'failed';
-    post.publishedAt = undefined;
-    post.publishingResponse = {
-      success: false,
-      platform: post.platform,
-      code: error.code || 'PUBLISHING_FAILED',
-      message: error.code === 'PUBLISHING_NOT_CONFIGURED'
-        ? error.message
-        : 'Publishing failed. Check the backend configuration and logs.',
-      attemptedAt,
-      failedAt: new Date(),
-    };
-    await post.save();
-    console.error(
-      `Post ${post._id} failed to publish to ${post.platform} (${post.publishingResponse.code})`
-    );
-    return post;
-  }
-
-  const completedAt = new Date();
-  post.status = 'published';
-  post.publishedAt = completedAt;
-  post.publishingResponse = {
-    success: true,
-    platform: post.platform,
-    attemptedAt,
-    completedAt,
-    providerResponse: response,
-  };
-  await post.save();
-  console.log(`Post ${post._id} was published to ${post.platform}`);
-
-  return post;
-}
-
-async function runScheduler() {
+async function runScheduler(ownerId) {
   const now = new Date();
+  const ownerFilter = ownerId ? { owner: ownerId } : {};
   const duePosts = await Post.find({
-    status: 'pending',
+    ...ownerFilter,
+    status: { $in: ['pending', 'processing'] },
+    providerPostId: { $exists: true, $ne: null },
     scheduledAt: { $lte: now },
   }).select('_id');
   const processedPosts = [];
@@ -62,27 +21,50 @@ async function runScheduler() {
       const post = await Post.findOneAndUpdate(
         {
           _id: duePost._id,
-          status: 'pending',
+          ...ownerFilter,
+          status: { $in: ['pending', 'processing'] },
           scheduledAt: { $lte: now },
+          $or: [
+            { statusCheckLeaseUntil: { $exists: false } },
+            { statusCheckLeaseUntil: null },
+            { statusCheckLeaseUntil: { $lte: now } },
+          ],
         },
-        {
-          $set: {
-            status: 'processing',
-            publishingResponse: {
-              success: null,
-              attemptedAt: now,
-            },
-          },
-          $unset: { publishedAt: 1 },
-        },
+        { $set: { statusCheckLeaseUntil: new Date(now.getTime() + 60000) } },
         { new: true }
       );
+      if (!post) continue;
 
-      if (post) {
-        processedPosts.push(await publishPost(post, now));
+      const user = await User.findById(post.owner);
+      const ownsAccount = user &&
+        user.connectedAccounts.some(
+          (account) =>
+            account.accountId === post.providerAccountId &&
+            account.platform === post.platform
+        );
+      if (!ownsAccount) {
+        post.status = 'failed';
+        post.publishingResponse = {
+          provider: 'zernio',
+          success: false,
+          code: 'CONNECTED_ACCOUNT_UNAVAILABLE',
+          checkedAt: new Date(),
+        };
+      } else {
+        await postStatusService.syncPostStatus(post);
       }
+
+      post.statusCheckLeaseUntil = undefined;
+      await post.save();
+      processedPosts.push(post);
     } catch (error) {
-      console.error(`Failed to process scheduled post ${duePost._id}:`, error);
+      await Post.updateOne(
+        { _id: duePost._id },
+        { $unset: { statusCheckLeaseUntil: 1 } }
+      );
+      console.error(
+        `Failed to synchronize scheduled post ${duePost._id} (${error.code || error.name || 'unknown'})`
+      );
     }
   }
 
@@ -95,10 +77,10 @@ function startScheduler() {
     try {
       await runScheduler();
     } catch (error) {
-      console.error('Scheduler error:', error.message);
+      console.error(`Scheduler error (${error.code || error.name || 'unknown'})`);
     }
   });
-  console.log('Scheduler started: checking pending posts every minute');
+  console.log('Scheduler started: checking due Zernio posts every minute');
 }
 
 function stopScheduler() {
