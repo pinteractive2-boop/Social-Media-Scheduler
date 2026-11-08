@@ -13,7 +13,11 @@ const options = {
     servers: [
       {
         url: 'http://localhost:5000',
-        description: 'Local development server',
+        description: 'Local Development',
+      },
+      {
+        url: 'https://social-media-scheduler-fzmm.onrender.com',
+        description: 'Render Deployment',
       },
     ],
     tags: [
